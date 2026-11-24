@@ -114,3 +114,33 @@ def test_speed_command_sets_and_cycles():
             await app._command("/speed 아무거나")
             assert app.speed.key == "normal"
     run(go())
+
+
+def test_escape_toggles_panic_mode():
+    ad, app = make()
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause(0.3)
+            await pilot.press("escape")
+            assert app.boss
+            await pilot.press("escape")
+            assert not app.boss
+    run(go())
+
+
+def test_notify_command_turns_background_notifications_off():
+    ad, app = make()
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause(0.5)
+            await app._command("/notify")
+            assert not app.notify_on
+            other = next(r for r in app.rooms if r.id != app.current.id)
+            app._notify(other.name, 3)
+            assert not any(st == "notify" for e in app.entries for st, _ in e.lines)
+            await app._command("/bg")
+            app._notify(other.name, 3)
+            assert any(st == "notify" for e in app.entries for st, _ in e.lines)
+    run(go())

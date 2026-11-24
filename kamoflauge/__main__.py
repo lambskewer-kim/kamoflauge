@@ -18,6 +18,7 @@ history = 15                            # 방 열 때 보여줄 이전 메시지
 strip_emoji = true
 show_time = false
 show_media = true                       # 사진/이모티콘을 [Image #N] 줄로 보여줄지
+notify = true                           # 다른 방 백그라운드 알림
 send_mode = "auto"                      # (맥) auto | background | activate
 my_name = ""                            # (윈도우) 카톡에 보이는 내 이름. 비우면 1:1 방에서 자동 추측
 
@@ -55,6 +56,7 @@ def cmd_run(args) -> None:
         strip_emoji=bool(raw.get("strip_emoji", True)),
         show_time=bool(raw.get("show_time", False)),
         show_media=bool(raw.get("show_media", True)),
+        notify=bool(raw.get("notify", True)),
     )
     try:
         adapter = get_adapter("mock" if args.mock else "auto", raw)

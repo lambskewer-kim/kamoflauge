@@ -62,6 +62,7 @@ class Config:
     strip_emoji: bool = True
     show_time: bool = False
     show_media: bool = True       # False면 사진/이모티콘/동영상 줄([Image #N] 등)을 숨긴다
+    notify: bool = True           # 다른 방 백그라운드 알림 줄을 보여줄지 (/notify로 켜고 끔)
 
 
 class Kamoflauge(App):
@@ -72,7 +73,7 @@ class Kamoflauge(App):
         Binding("ctrl+b", "boss", "boss", show=False, priority=True),
         Binding("shift+tab", "toggle_claude", "mode", show=False, priority=True),
         Binding("ctrl+t", "toggle_claude", "mode", show=False, priority=True),  # 터미널이 shift+tab을 가로챌 때
-        Binding("escape", "boss_on", "panic", show=False, priority=True),
+        Binding("escape", "boss_toggle", "panic", show=False, priority=True),
         Binding("ctrl+n", "next_room", "next", show=False, priority=True),
         Binding("ctrl+p", "prev_room", "prev", show=False, priority=True),
         Binding("ctrl+c", "quit_twice", "quit", show=False, priority=True),
@@ -110,6 +111,7 @@ class Kamoflauge(App):
         self._last_poll_end = 0.0
         self._sending = 0
         self.muted: set[str] = set()                 # 알림을 끈 방 (실명)
+        self.notify_on = self.cfg.notify            # 백그라운드 알림 전체 켜기 / 끄기
         self.chat_list: list[ChatEntry] = []         # 카톡 채팅 목록 (안 연 방 포함)
         self._list_unread: dict[str, int] | None = None  # 채팅 목록의 안 읽은 수 (None = 아직 기준값 없음)
         self._list_supported = True
@@ -510,7 +512,7 @@ class Kamoflauge(App):
 
     def _notify(self, name: str, n: int) -> None:
         """다른 방에 새 메시지: 내용 없이 방(가명)과 개수만 Claude Code 백그라운드 작업 알림처럼 보여준다."""
-        if name in self.muted:
+        if not self.notify_on or name in self.muted:
             return
         self._add([("notify", f"{self.dis.room_dir(name)}/\0{name}\0{n}")], real=True)
         self.last_sender = None
@@ -590,6 +592,9 @@ class Kamoflauge(App):
                 name = self.current.name
                 self.muted ^= {name}
                 self._sys(f"{'Muted' if name in self.muted else 'Unmuted'} background task {self.dis.room_dir(name)}/")
+        elif cmd == "notify":
+            self.notify_on = not self.notify_on
+            self._sys(f"Background task notifications {'on' if self.notify_on else 'off'}")
         elif cmd == "rooms":
             await self._refresh_rooms()
             lines = [("tool_dim", 'Search(pattern: "**/*", path: ".")')]
@@ -646,7 +651,7 @@ class Kamoflauge(App):
         lines = [("prose", "kamoflauge 도움말"), ("blank", "")]
         lines += [row(f"/{c.name} {c.args}".strip(), c.desc) for c in COMMANDS]
         lines += [("blank", ""),
-                  row("esc", "패닉 모드: 카톡 내용 숨기기 (ctrl+b로 복귀)"),
+                  row("esc", "패닉 모드 켜기 / 끄기 (카톡 내용 숨기기)"),
                   row("shift+tab / ctrl+t", "auto-claude 켜기 / 끄기"),
                   row("shift 꾹 누르기", "누르는 동안 실명 보기"),
                   row("ctrl+n / ctrl+p", "다음 / 이전 방"),
@@ -737,11 +742,11 @@ class Kamoflauge(App):
         self._next_filler = time.time() + random.uniform(1.0, 3.0)
         self._update_footer()
 
-    def action_boss_on(self) -> None:
+    def action_boss_toggle(self) -> None:
+        """Esc: 패닉 모드 켜기 / 끄기. 켤 때는 열린 / 메뉴도 닫는다."""
         self.query_one("#palette", Palette).hide()
         self._set_palette_layout(False)
-        if not self.boss:
-            self.action_boss()
+        self.action_boss()
 
     async def _cycle(self, step: int) -> None:
         if self.boss or not self.rooms:
