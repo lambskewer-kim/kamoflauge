@@ -287,6 +287,8 @@ class Kamoflauge(App):
             w = self.size.width - 6
         except Exception:
             w = 100
+        if room and not self.reveal and left.cell_len + r.cell_len + 2 > w:  # 좁으면 방 전환 안내부터 뺀다
+            left = Text.assemble(("⎇ ", DIM), (room, "bold #d0d0d0"))
         pad = max(1, w - left.cell_len - r.cell_len)
         self.query_one("#footer", Static).update(left + Text(" " * pad) + r)
         prompt = self.query_one("#prompt", Input)

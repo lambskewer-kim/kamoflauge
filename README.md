@@ -4,29 +4,13 @@
 카카오톡을 **Claude Code처럼 보이는 터미널 화면**에서 읽고 보내는 프로그램이에요.
 옆에서 보면 AI 코딩 에이전트가 열심히 일하는 화면으로 보여요.
 
-```
-⏺ Bash(cd scheduler && git log --oneline -15)
-  ⎿  3 commits
+![kamoflauge 화면: 카톡 대화가 Claude Code 작업 로그처럼 보여요](docs/screenshot-main.png)
 
-⏺ Read(scheduler/config.yaml)        ← 상대가 보낸 메시지 (방/보낸 사람이 가명으로 보임)
-  ⎿  점심 뭐 먹음?
-     오늘 퇴근 몇시?
-
-> ㄱㄱ 학식 가자                      ← 내가 보낸 메시지
-
-⏺ Bash(python -m pytest tests/ -q)    ← 가짜 작업 로그
-  ⎿  57 passed, 1 warnings in 8.42s
-
-✻ Mulling… (9s · ↑ 2.9k tokens · esc to interrupt)
-╭────────────────────────────────────────────────────────────╮
-│ > Try "refactor scheduler/"                                │
-╰────────────────────────────────────────────────────────────╯
-  ⎇ scheduler/ (1/3)  ctrl+n/p to switch     ● 2 background tasks  ·  ⏵⏵ auto-claude on (shift+tab to cycle)
-```
+<sub>스크린샷은 예시 대화예요. `점심팟` 방은 `scheduler/`, 민수는 `config.yaml`, 지은은 `trainer.py`로 보여요.</sub>
 
 | 플랫폼 | 상태 |
 |---|---|
-| macOS | 동작 확인함 (카톡 맥 앱, 영어/한국어 UI) |
+| macOS | 동작 확인함 (카톡 맥 앱, 영어 UI) |
 | Windows | 코드만 작성함. **실제 윈도우에서 아직 테스트 안 됨** |
 
 ---
@@ -50,6 +34,10 @@
   실제 방 이름과 보낸 사람이 노란색으로 보여요. 이때는 가짜 로그와 스피너가 숨겨져서 채팅만 보여요. 손을 떼면 바로 원래대로 돌아와요.
   - 한글 쌍자음(ㅆ, ㅃ…)을 칠 때처럼 Shift를 짧게 누르거나 방금 타이핑했으면 반응하지 않아요.
   - kamoflauge를 띄운 터미널이 맨 앞에 있을 때만 동작해요.
+
+| Shift 꾹 누르기: 실명 보기 | Esc: 패닉 모드 |
+|---|---|
+| ![Shift를 누르고 있는 동안 실제 방 이름과 보낸 사람이 노란색으로 보여요](docs/screenshot-reveal.png) | ![패닉 모드에서는 카톡 내용이 사라지고 가짜 작업 로그만 보여요](docs/screenshot-panic.png) |
 
 ### 채팅
 - 현재 방에 바로 입력해서 보내요. 카톡 창을 앞으로 꺼내지 않아요(맥에서 실패하면 잠깐 꺼냈다가 돌아와요).
@@ -238,6 +226,7 @@ kamoflauge dump --raw    # 원문 그대로
 kamoflauge --mock               # 카톡 없이 가짜 대화로 화면 구경
 python3 -m pytest -q tests      # 단위 테스트
 python3 -m pyflakes kamoflauge  # 린트
+python3 docs/make_screenshots.py  # README 스크린샷 다시 만들기 (예시 대화, Chrome 필요)
 ```
 
 ```
@@ -253,6 +242,7 @@ kamoflauge/
   shift.py             Shift 꾹 누르기 감지 (맥: Quartz, 윈도우: GetAsyncKeyState)
   models.py            Message, Room
 tests/                 윈도우 클립보드 파서, sync 테스트
+docs/                  README 스크린샷과 생성 스크립트
 ```
 
 새 플랫폼은 `adapters/base.py`의 `Adapter`를 구현해서 `adapters/__init__.py`의 `get_adapter`에 등록하면 돼요.

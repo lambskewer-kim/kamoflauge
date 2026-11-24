@@ -7,3 +7,4 @@ kakao_ax_dump.txt
 .ruff_cache/
 .DS_Store
 *.log
+docs/*.svg
