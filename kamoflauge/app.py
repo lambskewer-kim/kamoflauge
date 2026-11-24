@@ -48,6 +48,7 @@ class Entry:
     lines: list[tuple[str, str]]  # (style, text)
     real: bool                    # True면 카톡 내용 → 보스 모드에서 숨김
     fake: bool = False            # True면 가짜 Claude 작업 로그 → Shift로 실명 볼 때 숨김
+    room: str | None = None       # 추가될 때 보고 있던 방. 다른 방으로 바꾸면 안 보인다 (None = 항상 보임)
 
 
 @dataclass
@@ -200,6 +201,8 @@ class Kamoflauge(App):
             log.write(self._render_line(st, tx))
 
     def _visible(self, e: Entry) -> bool:
+        if e.room is not None and not (self.current and e.room == self.current.id):
+            return False  # 다른 방에서 쌓인 줄은 섞지 않는다
         if e.real and self.boss:
             return False
         return not (e.fake and self.reveal)
@@ -211,7 +214,7 @@ class Kamoflauge(App):
             lines = lines[:-1]
         if lines and lines[0][0] != "cont":
             lines = [("blank", "")] + lines
-        e = Entry(lines, real, fake)
+        e = Entry(lines, real, fake, self.current.id if self.current else None)
         self.entries.append(e)
         if len(self.entries) > 600:
             self.entries = self.entries[-400:]
@@ -430,14 +433,20 @@ class Kamoflauge(App):
             self.rooms = []
 
     async def _open(self, room: Room) -> None:
+        """방을 연다. 화면에는 이 방의 줄만 보이고, 이 방의 예전 줄은 지우고 최근 대화를 새로 불러온다
+        (자리를 비운 사이 온 메시지가 빠지거나 같은 메시지가 두 번 나오지 않게)."""
         self.current = room
         self.unread[room.id] = 0
         self.last_sender = None
+        self.entries = [e for e in self.entries if e.room != room.id]
+        self._rebuild()
         try:
             msgs = await asyncio.to_thread(self.adapter.messages, room.id)
         except Exception as ex:  # noqa: BLE001
             self._sys(f"Error: {ex}")
             return
+        if self.current is not room:
+            return  # 읽는 사이 다른 방으로 바뀜
         self.snapshots[room.id] = msgs
         self._add([("tool_dim", f"Bash(cd {self.dis.room_dir(room.name)} && git log --oneline -{self.cfg.history})"),
                    ("result_dim", f"{len(msgs[-self.cfg.history:])} commits")], real=True)
@@ -629,7 +638,8 @@ class Kamoflauge(App):
         elif cmd == "panic":
             self.action_boss()
         elif cmd == "clear":
-            self.entries.clear()
+            cur = self.current.id if self.current else None
+            self.entries = [e for e in self.entries if e.room not in (None, cur)]  # 지금 방 화면만 지운다
             self._rebuild()
         elif cmd == "quit":
             self.exit()

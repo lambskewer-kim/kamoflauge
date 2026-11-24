@@ -21,7 +21,8 @@ def run(coro):
 def test_history_mixes_fake_logs_when_auto_claude_on():
     random.seed(0)
     ad, app = make(filler=True)
-    ad._rooms["민수"] = [Message("민수", f"m{i}") for i in range(12)]
+    first = next(iter(ad._rooms))
+    ad._rooms[first] = [Message("민수", f"m{i}") for i in range(12)]
 
     async def go():
         async with app.run_test() as pilot:
@@ -144,3 +145,39 @@ def test_notify_command_turns_background_notifications_off():
             app._notify(other.name, 3)
             assert any(st == "notify" for e in app.entries for st, _ in e.lines)
     run(go())
+
+
+def test_switching_rooms_does_not_mix_messages():
+    ad, app = make()
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause(0.5)
+            a, b = app.rooms[0], app.rooms[1]
+            ad._rooms[a.id] = [Message("민수", "only-in-a")]
+            ad._rooms[b.id] = [Message("하은", "only-in-b")]
+            await app._open(a)
+
+            def shown():
+                return [t for e in app.entries if app._visible(e) for _, t in e.lines]
+            assert "only-in-a" in shown() and "only-in-b" not in shown()
+            await app._open(b)
+            assert "only-in-b" in shown() and "only-in-a" not in shown()
+            await app._open(a)
+            assert shown().count("only-in-a") == 1   # 돌아와도 두 번 나오지 않는다
+    run(go())
+
+
+def test_mock_messages_stay_in_their_own_room():
+    import kamoflauge.adapters.mock as mock
+    ad = mock.MockAdapter(chatter=0.0)
+    before = {k: len(v) for k, v in ad._rooms.items()}
+    for _ in range(200):
+        ad._next = 0
+        ad._tick()
+    senders = {room: {m.sender for m in ad._rooms[room][before[room]:]} for room in ad._rooms}
+    expected = {}
+    for room, sender, _ in mock._INCOMING:
+        expected.setdefault(room, set()).add(sender)
+    for room, got in senders.items():
+        assert got <= expected.get(room, set())

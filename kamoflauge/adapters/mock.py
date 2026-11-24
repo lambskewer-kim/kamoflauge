@@ -8,10 +8,20 @@ import time
 from ..models import Message, Room
 from .base import Adapter
 
+# (방, 보낸 사람, 내용). 메시지는 항상 자기 방에만 들어간다.
 _INCOMING = [
-    ("민수", "점심 뭐 먹음?"), ("민수", "학식 ㄱ?"), ("엄마", "저녁 먹고 들어오니"),
-    ("지은", "교수님 오늘 랩미팅 30분 미뤄진대"), ("지은", "ㅋㅋㅋㅋㅋ"),
-    ("민수", "사진"), ("지은", "이모티콘"), ("민수", "오늘 퇴근 몇시?"),
+    ("고딩 친구들", "민수", "야 이번 주 토요일 다들 시간 됨?"),
+    ("고딩 친구들", "지은", "나 오후는 됨"),
+    ("고딩 친구들", "현우", "ㅋㅋㅋㅋㅋㅋ"),
+    ("고딩 친구들", "서연", "어디서 봐? 강남?"),
+    ("고딩 친구들", "민수", "사진"),
+    ("고딩 친구들", "지은", "이모티콘"),
+    ("고딩 친구들", "현우", "나 방금 일어남"),
+    ("대학 동기들", "준호", "과제 마감 오늘 자정 맞지?"),
+    ("대학 동기들", "하은", "ㅇㅇ 11시 59분까지"),
+    ("대학 동기들", "준호", "살려줘"),
+    ("민수", "민수", "야 아까 그 짤 뭐였지"),
+    ("민수", "민수", "ㅋㅋㅋ 보내줘"),
 ]
 
 
@@ -19,12 +29,18 @@ class MockAdapter(Adapter):
     def __init__(self, chatter: float = 6.0):
         self._lock = threading.Lock()
         self._rooms = {
-            "민수": [Message("민수", "야 뭐함", "오후 1:58"), Message("", "연구실", "오후 1:59", True)],
-            "엄마": [Message("엄마", "밥은 먹었어?", "오후 12:10")],
-            "랩실 단톡": [
-                Message("지은", "오늘 GPU 누가 쓰고 있어요?", "오후 1:40"),
-                Message("현우", "제가 4번 쓰고 있어요", "오후 1:41"),
+            "고딩 친구들": [
+                Message("민수", "다들 살아있냐", "오후 1:52"),
+                Message("서연", "ㅇㅇ 연구실", "오후 1:53"),
+                Message("", "나도 연구실ㅋㅋ", "오후 1:53", True),
+                Message("현우", "다들 고생이 많다", "오후 1:55"),
+                Message("지은", "이번 주에 한 번 모이자", "오후 1:56"),
             ],
+            "대학 동기들": [
+                Message("준호", "내일 수업 휴강이래", "오전 11:20"),
+                Message("하은", "개꿀", "오전 11:21"),
+            ],
+            "민수": [Message("민수", "야 뭐함", "오후 1:58"), Message("", "연구실", "오후 1:59", True)],
         }
         self._chatter = chatter
         self._closed: dict = {"동아리": [Message("수빈", "이번 주 회식 언제?", "오전 9:02")]}  # 창으로 안 연 방
@@ -36,9 +52,12 @@ class MockAdapter(Adapter):
         if now < self._next:
             return
         self._next = now + random.uniform(self._chatter * 0.5, self._chatter * 1.5)
-        sender, text = random.choice(_INCOMING)
-        room = sender if sender in self._rooms else "랩실 단톡"
-        self._rooms[room].append(Message(sender, text, time.strftime("%H:%M")))
+        room, sender, text = random.choice(_INCOMING)
+        if room in self._rooms:
+            self._rooms[room].append(Message(sender, text, time.strftime("%H:%M")))
+        elif room in self._closed:
+            self._closed[room].append(Message(sender, text, time.strftime("%H:%M")))
+            self._list_unread[room] = self._list_unread.get(room, 0) + 1
 
     def rooms(self) -> list[Room]:
         return [Room(k, k) for k in self._rooms]
