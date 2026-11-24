@@ -17,7 +17,102 @@
 
 ---
 
-## 주요 기능
+## 🛠️ 설치 방법
+
+<details>
+<summary><b>🍎 macOS</b></summary>
+
+#### 1. 설치
+
+Python 3.9 이상이 필요해요.
+
+```bash
+git clone https://github.com/lambskewer-kim/kamoflauge.git
+cd kamoflauge
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+#### 2. 손쉬운 사용 권한 주기
+
+1. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**을 열어요.
+2. 쓰는 터미널 앱(터미널, iTerm2, Ghostty 등)을 켜요.
+3. 터미널을 **완전히 종료했다가 다시 실행**해요. 권한은 재시작해야 적용돼요.
+
+#### 3. 카톡 채팅방을 창으로 열기
+
+카톡에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.**
+여러 방을 열어두면 `Ctrl+N` / `Ctrl+P`로 오갈 수 있어요.
+
+#### 4. 연결 확인
+
+```bash
+kamoflauge check
+```
+
+방마다 최근 메시지 5개의 보낸 사람과 내 메시지 구분이 맞고 `입력창 찾음`이 나오면 성공이에요.
+
+#### 5. 실행
+
+```bash
+kamoflauge
+```
+
+다음부터는 `cd kamoflauge && source .venv/bin/activate && kamoflauge`만 하면 돼요.
+
+</details>
+
+<details>
+<summary><b>🪟 Windows</b></summary>
+
+#### 1. 설치
+
+[python.org](https://www.python.org/)에서 Python 3.9 이상을 설치해요. 설치할 때 "Add python.exe to PATH"를 체크하세요.
+
+```powershell
+git clone https://github.com/lambskewer-kim/kamoflauge.git
+cd kamoflauge
+py -m venv .venv
+.venv\Scripts\activate
+pip install -e .
+```
+
+#### 2. 터미널 준비
+
+**Windows Terminal** 사용을 추천해요.
+
+#### 3. 클립보드 기록 끄기 (중요)
+
+윈도우에서는 대화를 **클립보드로 복사해서** 읽어요.
+
+- **설정 → 시스템 → 클립보드**에서 **클립보드 기록**과 **기기 간 동기화**를 꺼두세요.
+  켜져 있으면 대화 내용이 Win+V 기록에 계속 쌓여요.
+- 실행 중에는 클립보드에 복사해 둔 이미지나 파일이 사라질 수 있어요.
+
+#### 4. 카톡 채팅방을 창으로 열기
+
+카톡 PC에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.**
+
+#### 5. 연결 확인과 내 이름 설정
+
+```powershell
+kamoflauge check
+```
+
+`내 이름: ''  → 못 찾음`이 나오면 `%USERPROFILE%\.kamoflauge\config.toml`을 열고 `my_name`에 카톡에 보이는 내 이름을 적으세요.
+
+#### 6. 실행
+
+```powershell
+kamoflauge
+```
+
+</details>
+
+---
+
+## ✨ 주요 기능
 
 ### 🪖 위장
 - **방과 사람을 파일명으로 바꿔 보여줘요.**
@@ -47,12 +142,12 @@
 |---|---|
 | ![Shift를 누르고 있는 동안 실제 방 이름과 보낸 사람이 노란색으로 보여요](docs/screenshot-reveal.png) | ![패닉 모드에서는 카톡 내용이 사라지고 가짜 작업 로그만 보여요](docs/screenshot-panic.png) |
 
-### 채팅
+### 💬 채팅
 - 현재 방에 바로 입력해서 보내요.
 - 열려 있는 채팅방 창이 곧 방 목록이에요. `Ctrl+N` / `Ctrl+P`로 방을 바꿔요.
 - `/open-chatroom 점심팟`처럼 방 이름을 치면 그 방을 새 창으로 열고, `/close-chatroom`으로 지금 방 창을 닫아요.
 
-### `/` 명령어
+### ⌨️ `/` 명령어
 
 실제 Claude Code처럼 입력창에 `/`를 치면 명령어 목록이 떠요. 글자를 더 치면 걸러지고, `↑` `↓`로 고르고 `Tab`으로 완성, `Enter`로 실행해요.
 맥에서는 `/open-chatroom`을 고르면 열 수 있는 방 목록이 이어서 떠요. 가명 오른쪽에 **실제 방 이름과 안 읽은 수**가 같이 보이고, 한글로 쳐서 걸러도 돼요. 윈도우에서는 방 이름을 직접 쳐요.
@@ -75,7 +170,7 @@
 | `/clear` | 화면 지우기 |
 | `/quit` | 종료 |
 
-### 단축키
+### ⚡ 단축키
 
 | 입력 | 동작 |
 |---|---|
@@ -92,95 +187,7 @@
 
 ---
 
-## 세팅 방법 (macOS)
-
-### 1. 설치
-
-Python 3.9 이상이 필요해요.
-
-```bash
-git clone <이 저장소> kamoflauge   # 또는 폴더를 그대로 복사
-cd kamoflauge
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-### 2. 손쉬운 사용 권한 주기
-
-1. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**을 열어요.
-2. 쓰는 터미널 앱(터미널, iTerm2, Ghostty 등)을 켜요.
-3. 터미널을 **완전히 종료했다가 다시 실행**해요. 권한은 재시작해야 적용돼요.
-
-### 3. 카톡 채팅방을 창으로 열기
-
-카톡에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.**
-여러 방을 열어두면 `Ctrl+N` / `Ctrl+P`로 오갈 수 있어요.
-
-### 4. 연결 확인
-
-```bash
-kamoflauge check
-```
-
-방마다 최근 메시지 5개의 보낸 사람과 내 메시지 구분이 맞고 `입력창 찾음`이 나오면 성공이에요.
-
-### 5. 실행
-
-```bash
-kamoflauge
-```
-
-다음부터는 `cd kamoflauge && source .venv/bin/activate && kamoflauge`만 하면 돼요.
-
----
-
-## 세팅 방법 (Windows)
-
-### 1. 설치
-
-[python.org](https://www.python.org/)에서 Python 3.9 이상을 설치해요. 설치할 때 "Add python.exe to PATH"를 체크하세요.
-
-```powershell
-cd kamoflauge
-py -m venv .venv
-.venv\Scripts\activate
-pip install -e .
-```
-
-### 2. 터미널 준비
-
-**Windows Terminal** 사용을 추천해요.
-
-### 3. 클립보드 기록 끄기 (중요)
-
-윈도우에서는 대화를 **클립보드로 복사해서** 읽어요.
-
-- **설정 → 시스템 → 클립보드**에서 **클립보드 기록**과 **기기 간 동기화**를 꺼두세요.
-  켜져 있으면 대화 내용이 Win+V 기록에 계속 쌓여요.
-- 실행 중에는 클립보드에 복사해 둔 이미지나 파일이 사라질 수 있어요.
-
-### 4. 카톡 채팅방을 창으로 열기
-
-카톡 PC에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.**
-
-### 5. 연결 확인과 내 이름 설정
-
-```powershell
-kamoflauge check
-```
-
-`내 이름: ''  → 못 찾음`이 나오면 `%USERPROFILE%\.kamoflauge\config.toml`을 열고 `my_name`에 카톡에 보이는 내 이름을 적으세요.
-
-### 6. 실행
-
-```powershell
-kamoflauge
-```
-
----
-
-## 설정
+## ⚙️ 설정
 
 설정 파일은 처음 실행할 때 자동으로 만들어져요.
 - macOS: `~/.kamoflauge/config.toml`
@@ -204,7 +211,7 @@ my_name = ""                            # (윈도우) 카톡에 보이는 내 �
 
 ---
 
-## 안 될 때
+## 🆘 안 될 때
 
 | 증상 | 해결 |
 |---|---|
@@ -216,7 +223,7 @@ my_name = ""                            # (윈도우) 카톡에 보이는 내 �
 
 ---
 
-## 주의
+## ⚠️ 주의
 
 - **채팅방 창이 열려 있으면 카톡은 그 방을 읽음으로 처리해요.** 상대 화면에서 1이 사라져요.
 - 공식 카톡 앱을 조작만 해서 계정 정지 위험은 낮아요. 다만 카톡이 업데이트되면 안 될 수 있어요.
@@ -224,7 +231,7 @@ my_name = ""                            # (윈도우) 카톡에 보이는 내 �
 
 ---
 
-## 개발
+## 🧪 개발
 
 ```bash
 kamoflauge --mock               # 카톡 없이 가짜 대화로 화면 구경
