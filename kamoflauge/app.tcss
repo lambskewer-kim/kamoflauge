@@ -1,0 +1,48 @@
+Screen {
+    background: $background;
+    layers: base;
+}
+
+#log {
+    height: 1fr;
+    background: $background;
+    padding: 0 1;
+    scrollbar-size-vertical: 1;
+    scrollbar-color: #444444;
+    scrollbar-background: $background;
+}
+
+#spinner {
+    height: 1;
+    padding: 0 1;
+    color: #d77757;
+}
+
+#prompt-box {
+    height: 3;
+    border: round #888888;
+    margin: 0 1;
+    padding: 0 1;
+}
+
+#prompt-box > Label {
+    width: 2;
+    color: #ffffff;
+}
+
+#prompt {
+    border: none;
+    height: 1;
+    padding: 0;
+    background: $background;
+}
+
+#prompt:focus {
+    border: none;
+}
+
+#footer {
+    height: 1;
+    padding: 0 3;
+    color: #8a8a8a;
+}

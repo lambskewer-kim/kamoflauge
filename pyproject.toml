@@ -1,0 +1,25 @@
+[project]
+name = "kamoflauge"
+version = "0.1.0"
+description = "Terminal skin for KakaoTalk (macOS)"
+requires-python = ">=3.9"
+dependencies = [
+    "textual>=0.80",
+    "tomli>=2.0; python_version < '3.11'",
+    "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
+]
+
+[project.scripts]
+kamoflauge = "kamoflauge.__main__:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["kamoflauge", "kamoflauge.adapters"]
+
+[tool.setuptools.package-data]
+kamoflauge = ["*.tcss"]
