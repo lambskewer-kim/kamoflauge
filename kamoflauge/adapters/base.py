@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ..models import Message, Room
+from ..models import ChatEntry, Message, Room
 
 
 class Adapter(ABC):
@@ -19,6 +19,19 @@ class Adapter(ABC):
     @abstractmethod
     def send(self, room_id: str, text: str) -> None:
         """메시지 전송. 실패하면 예외."""
+
+    # --- 선택 기능 (지원 안 하는 어댑터는 NotImplementedError) ---
+    def chat_list(self, limit: int = 20) -> list[ChatEntry]:
+        """카톡 채팅 목록(최근 순). 창으로 안 연 방도 포함."""
+        raise NotImplementedError
+
+    def open_room(self, name: str) -> None:
+        """채팅 목록에서 방을 찾아 창으로 연다."""
+        raise NotImplementedError
+
+    def close_room(self, room_id: str) -> None:
+        """채팅방 창을 닫는다."""
+        raise NotImplementedError
 
     def close(self) -> None:
         pass

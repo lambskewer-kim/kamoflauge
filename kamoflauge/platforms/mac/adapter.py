@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import time
 
 from ApplicationServices import (  # type: ignore
@@ -33,8 +34,8 @@ from AppKit import (  # type: ignore
 )
 import Quartz  # type: ignore
 
-from ..models import Message, Room
-from .base import Adapter
+from ...models import ChatEntry, Message, Room
+from ...adapters.base import Adapter
 
 BUNDLE_IDS = ("com.kakao.KakaoTalkMac", "com.kakao.KakaoTalk")
 MAIN_TITLES = {"카카오톡", "KakaoTalk", ""}
@@ -145,6 +146,8 @@ class MacKakaoAdapter(Adapter):
         self.include_main = include_main
         self._win_cache: dict = {}
         self._table_cache: dict = {}
+        self._read_once: set = set()
+        self._lock = threading.Lock()  # 읽기와 전송의 AX 호출이 뒤섞이지 않게
         if not is_trusted(prompt=True):
             raise PermissionError(
                 "손쉬운 사용 권한이 없습니다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용 에서 "
@@ -191,6 +194,7 @@ class MacKakaoAdapter(Adapter):
                 out.append(Room(title, title))
         self._win_cache = cache
         self._table_cache = {k: v for k, v in self._table_cache.items() if k in cache}
+        self._read_once &= set(cache)
         return out
 
     def messages(self, room_id: str) -> list[Message]:
@@ -201,9 +205,25 @@ class MacKakaoAdapter(Adapter):
             if table is None:
                 return []
             self._table_cache[room_id] = table
-        return parse_table(table)
+        rows = POLL_ROWS if room_id in self._read_once else FULL_ROWS
+        with self._lock:
+            msgs = parse_table(table, rows)
+        if msgs:
+            self._read_once.add(room_id)
+        return msgs
 
     def send(self, room_id: str, text: str) -> None:
+        t0 = time.perf_counter()
+        with self._lock:
+            waited = time.perf_counter() - t0
+            try:
+                how = self._send_locked(room_id, text)
+            except Exception as ex:
+                _send_log(f"fail: {type(ex).__name__}: {_safe_reason(ex)} (waited {waited:.1f}s)")
+                raise
+        _send_log(f"ok: {how} (waited {waited:.1f}s, total {time.perf_counter() - t0:.1f}s)")
+
+    def _send_locked(self, room_id: str, text: str) -> str:
         win = self._window(room_id)
         inp = find_input(win)
         if inp is None:
@@ -211,10 +231,16 @@ class MacKakaoAdapter(Adapter):
         # 카톡은 자기 창 중 맨 앞(main) 창의 입력만 제대로 받는다. 방을 바꾸면 대상 창이 뒤에 있으므로
         # 카톡 안에서만 앞으로 올린다 (카톡 앱 자체를 활성화하지는 않음).
         _make_main(win, inp)
-        AXUIElementSetAttributeValue(inp, "AXValue", text)
+        for _ in range(3):
+            AXUIElementSetAttributeValue(inp, "AXValue", text)
+            if (_attr(inp, "AXValue") or "") == text:
+                break
+            time.sleep(0.1)
+        else:
+            raise RuntimeError("카톡 입력창에 글자를 넣지 못했습니다")
 
-        def sent() -> bool:
-            return (_attr(inp, "AXValue") or "") != text
+        def sent() -> bool:  # 입력창이 완전히 비었을 때만 전송된 것으로 본다
+            return not (_attr(inp, "AXValue") or "").strip()
 
         if self.send_mode in ("background", "auto"):
             btn = find_send_button(win)
@@ -222,21 +248,76 @@ class MacKakaoAdapter(Adapter):
                 AXUIElementPerformAction(btn, "AXPress")
                 time.sleep(0.3)
                 if sent():
-                    return _send_log("ok: send button")
+                    return "send button"
+            AXUIElementSetAttributeValue(inp, "AXValue", text)  # Return이 줄바꿈으로 들어갔을 수 있으니 다시 맞춘다
             AXUIElementSetAttributeValue(inp, "AXFocused", True)
             self._post_return_to_pid()
             time.sleep(0.35)
             if sent():
-                return _send_log("ok: return to pid")
+                return "return to pid"
             if self.send_mode == "background":
-                _send_log("fail: background")
                 raise RuntimeError("백그라운드 전송 실패 (send_mode=activate 로 시도해보세요)")
+        AXUIElementSetAttributeValue(inp, "AXValue", text)
         self._send_by_activating(win, inp)
         time.sleep(0.3)
         if sent():
-            return _send_log("ok: activate")
-        _send_log("fail: all methods")
+            return "activate"
         raise RuntimeError("전송 실패: 카톡 입력창에 글자가 남아 있습니다")
+
+    # --- 채팅 목록 / 방 열고 닫기 ---
+    def _main_window(self):
+        for w in _attr(self._ax_app(), "AXWindows") or []:
+            if (_attr(w, "AXTitle") or "") in MAIN_TITLES and _chat_list_table(w) is not None:
+                return w
+        raise RuntimeError("카톡 메인 창(채팅 목록)을 찾지 못했습니다. 카톡 메인 창을 열어두세요")
+
+    def chat_list(self, limit: int = 20) -> list[ChatEntry]:
+        with self._lock:
+            table = _chat_list_table(self._main_window())
+            rows = list(_attr(table, "AXRows") or [])[:limit]
+            out = [parse_chat_row(_cell_items(r)) for r in rows]
+        return [e for e in out if e is not None]
+
+    def open_room(self, name: str) -> None:
+        if name in {r.id for r in self.rooms()}:
+            return
+        with self._lock:
+            main = self._main_window()
+            table = _chat_list_table(main)
+            row = next((r for r in list(_attr(table, "AXRows") or [])[:OPEN_SEARCH_ROWS]
+                        if (e := parse_chat_row(_cell_items(r))) and e.name == name), None)
+            if row is None:
+                raise RuntimeError(f"채팅 목록 위쪽 {OPEN_SEARCH_ROWS}개 안에서 방을 찾지 못했습니다")
+            # 목록에서 행을 선택하고 Enter → 카톡이 그 방을 새 창으로 연다
+            _make_main(main, table)
+            AXUIElementSetAttributeValue(row, "AXSelected", True)
+            self._post_return_to_pid()
+        if self._wait_window(name):
+            return
+        with self._lock:  # 백그라운드 Enter가 안 먹으면 카톡을 잠깐 앞으로 꺼내서 Enter
+            self._send_by_activating(main, table)
+        if not self._wait_window(name):
+            raise RuntimeError("방을 열지 못했습니다")
+
+    def _wait_window(self, name: str, timeout: float = 2.5) -> bool:
+        end = time.time() + timeout
+        while time.time() < end:
+            if any((_attr(w, "AXTitle") or "") == name for w in _attr(self._ax_app(), "AXWindows") or []):
+                return True
+            time.sleep(0.15)
+        return False
+
+    def close_room(self, room_id: str) -> None:
+        with self._lock:
+            win = self._window(room_id)
+            btn = next((c for role, c in _top_children(win)
+                        if role == "AXButton" and _attr(c, "AXSubrole") == "AXCloseButton"), None)
+            if btn is None:
+                raise RuntimeError("닫기 버튼을 찾지 못했습니다")
+            AXUIElementPerformAction(btn, "AXPress")
+            self._win_cache.pop(room_id, None)
+            self._table_cache.pop(room_id, None)
+            self._read_once.discard(room_id)
 
     def has_input(self, room_id: str) -> bool:
         return find_input(self._window(room_id)) is not None
@@ -278,6 +359,11 @@ class MacKakaoAdapter(Adapter):
 #     AXButton 'Send'                                          ← 전송 버튼
 
 SEND_TITLES = {"Send", "전송"}
+SHARE_TITLES = {"Share", "공유"}
+PHOTO_MIN = 80  # 말풍선 배경도 AXImage라서, 이보다 작은 이미지만 있는 행은 사진으로 보지 않는다
+FULL_ROWS = 50  # 방을 처음 읽을 때 행 수
+OPEN_SEARCH_ROWS = 200  # /open-chatroom 때 채팅 목록에서 찾아볼 행 수
+POLL_ROWS = 15  # 그다음부터 폴링할 때 읽는 행 수 (새 메시지는 아래에 붙으므로 끝부분만 보면 된다)
 ME_LEFT_MARGIN = 73  # 셀 왼쪽에서 본문까지 거리가 이보다 크면 내 메시지(오른쪽 정렬)
 
 
@@ -291,6 +377,11 @@ def _make_main(win, inp) -> None:
 SEND_LOG = os.path.expanduser("~/.kamoflauge/send.log")
 
 
+def _safe_reason(ex: Exception) -> str:
+    """로그용 실패 사유. KeyError에는 방 이름이 들어 있으므로 빼고 남긴다."""
+    return "chat window not found" if isinstance(ex, KeyError) else str(ex)
+
+
 def _send_log(result: str) -> None:
     """어느 전송 방법이 통했는지 남긴다 (메시지 내용과 방 이름은 남기지 않음)."""
     try:
@@ -298,6 +389,37 @@ def _send_log(result: str) -> None:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {result}\n")
     except OSError:
         pass
+
+
+def _chat_list_table(main):
+    """메인 창의 채팅 목록 표 (AXScrollArea > AXTable)."""
+    for role, c in _top_children(main):
+        if role == "AXScrollArea":
+            for cc in _children(c):
+                if _attr(cc, "AXRole") == "AXTable":
+                    return cc
+    return None
+
+
+BADGE_RE = re.compile(r"^\d{1,3}\+?$")
+
+
+def parse_chat_row(items) -> ChatEntry | None:
+    """채팅 목록 한 행 → ChatEntry. 순서: [Profile] 이름 [멤버 수] 시간 [마지막 메시지] [안 읽은 수].
+    멤버 수는 시간 앞에, 안 읽은 수는 시간 뒤에 온다."""
+    name, unread, seen_time = "", 0, False
+    for role, text, _, _ in items:
+        if role != "AXStaticText" or not text:
+            continue
+        t = text.replace("\u202f", " ").strip()
+        if TIME_RE.match(t) or DATE_RE.match(t) or t in ("Yesterday", "어제"):
+            seen_time = True
+        elif BADGE_RE.match(t) or t.isdigit():
+            if seen_time:
+                unread = int(t.rstrip("+"))
+        elif not name:
+            name = t
+    return ChatEntry(name, unread) if name else None
 
 
 def _top_children(win):
@@ -363,12 +485,21 @@ def _cell_items(row):
             if role not in ("AXStaticText", "AXTextArea", "AXButton", "AXImage"):
                 continue
             text = next((t.strip() for t in (value, title, desc) if isinstance(t, str) and t.strip()), "")
-            if role == "AXImage":
-                items.append((role, text, 0, 0))
-                continue
             p, sz = _xy(pos, kAXValueCGPointType), _xy(size, kAXValueCGSizeType)
+            if role == "AXImage":  # 이미지는 width 자리에 짧은 변 길이를 넣는다 (사진 판정용)
+                items.append((role, text, p[0] if p else 0, min(sz) if sz else 0))
+                continue
             items.append((role, text, p[0] if p else 0, sz[0] if sz else 0))
     return items
+
+
+def _photo_x(items) -> float | None:
+    """사진 행이면 사진의 x 좌표, 아니면 None. Share 버튼이 있거나 큰 이미지가 있어야 사진이다."""
+    big = [x for r, _, x, side in items if r == "AXImage" and side >= PHOTO_MIN]
+    share = any(r == "AXButton" and t in SHARE_TITLES for r, t, _, _ in items)
+    if not big and not share:
+        return None
+    return big[0] if big else 0
 
 
 def parse_rows(rows: list, cell_left: float) -> list[Message]:
@@ -394,11 +525,10 @@ def parse_rows(rows: list, cell_left: float) -> list[Message]:
             if leftover and has_profile and not name:
                 name = " ".join(leftover)
         if not bodies:
-            imgs = [r for r, *_ in items if r == "AXImage"]
-            if imgs and (has_profile or time_s):
-                bodies = [("사진", 0)]  # 텍스트 없는 말풍선 = 사진/이모티콘
-            else:
-                continue  # 날짜 구분선 등
+            photo = _photo_x(items)
+            if photo is None:
+                continue  # 날짜 구분선, 또는 글자가 아직 안 채워진 말풍선 → 다음 폴링 때 다시 읽는다
+            bodies = [("사진", photo)]
         text = "\n".join(t for t, _ in bodies)
         x = bodies[0][1]
         is_me = (not has_profile) and x > 0 and (x - cell_left) > ME_LEFT_MARGIN
@@ -411,19 +541,28 @@ def parse_rows(rows: list, cell_left: float) -> list[Message]:
     return msgs
 
 
-def parse_table(table, last_n: int = 40) -> list[Message]:
+def _has_profile(items) -> bool:
+    return any(r == "AXButton" and t == "Profile" for r, t, _, _ in items)
+
+
+def parse_table(table, min_rows: int = FULL_ROWS, last_n: int = 40) -> list[Message]:
+    """마지막 min_rows 행을 읽는다. 맨 앞 행이 연속 메시지(이름 없음)면 보낸 사람을 알 수 있도록
+    Profile이 있는 행이 나올 때까지 한 행씩 더 읽는다 (최대 FULL_ROWS)."""
     rows = list(_attr(table, "AXRows") or [c for c in _children(table) if _attr(c, "AXRole") == "AXRow"])
     p = _point(table)
     cell_left = p[0] + 1 if p else 0
-    # 앞쪽 메시지의 보낸 사람을 알기 위해 조금 더 넉넉히 읽는다
-    rows = rows[-(last_n + 10):]
-    parsed = parse_rows([_cell_items(r) for r in rows], cell_left)
-    return parsed[-last_n:]
+    start = max(0, len(rows) - min_rows)
+    parsed_rows = [_cell_items(r) for r in rows[start:]]
+    limit = max(0, len(rows) - FULL_ROWS)
+    while start > limit and parsed_rows and not _has_profile(parsed_rows[0]):
+        start -= 1
+        parsed_rows.insert(0, _cell_items(rows[start]))
+    return parse_rows(parsed_rows, cell_left)[-last_n:]
 
 
 def parse_window(win, last_n: int = 40) -> list[Message]:
     table = _message_table(win)
-    return [] if table is None else parse_table(table, last_n)
+    return [] if table is None else parse_table(table, last_n=last_n)
 
 
 # ---------- 진단 도구 ----------

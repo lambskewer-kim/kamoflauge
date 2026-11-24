@@ -70,6 +70,14 @@ async def shoot() -> list[Path]:
         await pilot.pause(0.15)
         files.append(save(app, "screenshot-main"))
 
+        # / 명령어 목록
+        await pilot.press("/")
+        freeze_spinner(app)
+        await pilot.pause(0.3)
+        files.append(save(app, "screenshot-palette"))
+        await pilot.press("backspace")
+        await pilot.pause(0.3)
+
         # Shift 꾹 누르기: 실명 보기
         app._shift.shift_down = lambda: True
         app._last_typed = 0.0

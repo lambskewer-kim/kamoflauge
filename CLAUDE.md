@@ -7,7 +7,7 @@
 
 연구실에서 몰래 카톡을 하기 위한 프로그램이다. 맥 카카오톡을 **Claude Code처럼 보이는 터미널 UI**로 읽고 보낸다.
 - 상대 메시지는 `⏺ Read(<가명 파일명>)` 아래 `⎿ 본문`으로, 내 메시지는 `> 본문`으로 보인다.
-- 상대 이름은 `config.yaml` 같은 파일명 가명으로 바뀐다. 사진은 `[Image #N]`, 이모티콘은 `[Pasted text #N +1 lines]`로 바뀐다.
+- 상대 이름은 `config.yaml` 같은 파일명 가명으로 바뀐다. 사진은 `[Image #N]`, 이모티콘은 `[Pasted text #N +1 lines]`로 바뀐다(`show_media = false`면 숨김). 사진 판정은 Share 버튼이나 80px 이상 이미지가 있을 때만(말풍선 배경도 AXImage라서).
 - 화면 아래 스피너가 계속 돈다(`✻ Mulling… esc to interrupt`). 가짜 작업 로그(Read/Bash/Update)가 가끔 섞인다.
 - `Esc`를 누르면 패닉 모드가 된다(카톡 내용 숨김, 가짜 로그만 표시). `Ctrl+B`로 켜고 끈다.
 - 다른 방의 안 읽은 메시지 수는 푸터에 `● N background tasks`로 보인다.
@@ -21,16 +21,18 @@
 
 ```
 kamoflauge/
-  __main__.py         CLI: kamoflauge [--mock] | check | dump [--out F] [--raw]
-  app.py / app.tcss   Textual UI (Claude Code 스킨). Entry(lines, real) 목록을 유지하고, 패닉 모드에서는 real=True를 숨겨서 다시 그린다
-  models.py           Message(sender, text, time, is_me), Room(id, name). key()에서 time은 의도적으로 뺐다 (아래 참고)
+  __main__.py         CLI: kamoflauge [--mock] | check | shifttest | dump [--out F] [--raw]  (OS 분기 없음, platforms에 위임)
+  app.py / app.tcss   Textual UI (Claude Code 스킨). Entry(lines, real, fake) 목록을 유지하고, 패닉 모드에서는 real=True를 숨겨서 다시 그린다
+  palette.py          / 명령어 메뉴 (COMMANDS 목록, Palette 위젯)
+  models.py           Message(sender, text, time, is_me), Room(id, name), ChatEntry(name, unread). key()에서 time은 의도적으로 뺐다 (아래 참고)
   sync.py             이전/현재 스냅샷 비교 → 새 메시지 추출 (prev 꼬리와 cur 머리의 최장 겹침)
   disguise.py         가명 매핑, 사진/이모티콘 치환, 가짜 작업 로그 생성(fake_event)
-  adapters/base.py    인터페이스
+  adapters/base.py    인터페이스 (rooms/messages/send 필수, chat_list/open_room/close_room 선택)
   adapters/mock.py    가짜 카톡 (UI 테스트용, 아무 OS에서나 동작)
-  adapters/macos.py   실제 맥 카톡 (pyobjc: ApplicationServices, AppKit, Quartz)
-  adapters/windows.py 윈도우 카톡 (ctypes: Win32 메시지 + 클립보드). 실제 윈도우에서 미검증
-  shift.py            Shift 꾹 누르기 감지 (실명 보기)
+  platforms/          OS별 코드. 공통 코드에는 sys.platform 분기를 두지 않는다
+    __init__.py       current(), load(part), theme(), shift_watcher()
+    mac/              adapter.py (pyobjc 손쉬운 사용 API), shift.py, cli.py, theme.py (⏺, ✳ 스피너)
+    windows/          adapter.py (ctypes Win32 + 클립보드), shift.py, cli.py, theme.py (●, * 스피너: Windows Terminal은 ⏺/✳을 이모지로 그림)
 ```
 
 설정 파일은 `~/.kamoflauge/config.toml`이다(처음 실행 시 자동 생성). aliases, cwd, poll, filler, history, strip_emoji, show_time, send_mode가 있다.
@@ -88,11 +90,14 @@ time을 키에 넣으면 sync가 이전 메시지를 '바뀐 것'으로 보고 �
 - [x] 한글 IME 조합 글자가 화면 중간에 뜨던 문제 수정: `_sync_ime_cursor`가 터미널 커서를 입력창에 맞춘다 (실제 터미널에서 재확인 필요)
 - [x] 현재 방 표시: 푸터 왼쪽 `⎇ <방>/ (i/n)`, 메시지는 `Read(<방>/<보낸 사람>)`, 입력창 placeholder에도 방 이름
 - [x] `Shift+Tab`: auto-claude on(가짜 작업 로그 섞기, 푸터 초록색) ↔ off(채팅만). Shift로 실명을 볼 때는 가짜 로그(Entry.fake)와 스피너를 숨긴다
-- [x] Shift를 0.3초 이상 누르고 있으면 `Read(...)` 옆과 푸터에 실명(방 · 보낸 사람)을 노란색으로 표시 (`shift.py`).
+- [x] Shift를 0.3초 이상 누르고 있으면 `Read(...)` 옆과 푸터에 실명(방 · 보낸 사람)을 노란색으로 표시 (`platforms/*/shift.py`).
   터미널은 Shift 단독 입력을 안 보내므로 Quartz로 modifier 상태를 읽고, 맨 앞 앱이 이 터미널일 때만 반응한다.
   방금 타이핑했으면 무시한다(쌍자음 입력과 구분). 실제 터미널에서 재확인 필요
-- [x] 윈도우 어댑터 작성 (`adapters/windows.py`, ctypes만 사용). **실제 윈도우에서 아직 한 번도 안 돌려봄**
-  - 채팅방 = 최상위 `#32770` 창 중 `RICHEDIT50W`(입력창)와 `EVA_VH_ListControl_Dblclk`(메시지 목록)를 가진 것. 클래스 이름은 커뮤니티 자료 기준
+- [x] 윈도우 어댑터 작성 (`platforms/windows/adapter.py`, ctypes만 사용). 2026-11-24 실제 윈도우 테스트 후 패치 반영:
+  채팅방 창 클래스가 `EVA_Window_Dblclk`인 경우도 인정, 전송은 입력칸 클릭+EM_REPLACESEL 후 되읽어 확인, 빈 입력칸이 "메시지 입력"을 돌려줌,
+  Shift를 누르는 동안 Ctrl+A/C 복사 건너뜀(카톡 캡처 단축키 Ctrl+Shift+C와 겹침), 클립보드는 GetClipboardSequenceNumber로 확인,
+  Windows Terminal은 콘솔 창의 GW_OWNER가 실제 창
+  - 채팅방 = 최상위 `#32770`(또는 `EVA_Window_Dblclk`) 창 중 `RICHEDIT50W`(입력창)와 `EVA_VH_ListControl_Dblclk`(메시지 목록)를 가진 것. 클래스 이름은 커뮤니티 자료 기준
   - 읽기: 목록에 Ctrl+A/Ctrl+C를 PostMessage로 보내고(대상 스레드 키보드 상태를 잠깐 바꿔 Ctrl을 흉내냄) 클립보드를 `parse_clipboard`로 파싱. 원래 클립보드 텍스트는 복원
   - 내 메시지 구분: 복사 텍스트에 내 이름이 그대로 나오므로 `my_name` 설정 필요. 비우면 1:1 방(제목=상대 이름)에서 추측
   - 쓰기: WM_SETTEXT + Enter PostMessage, 입력창이 비었는지로 성공 판정
@@ -105,6 +110,21 @@ time을 키에 넣으면 sync가 이전 메시지를 '바뀐 것'으로 보고 �
 - [~] 폴링 성능: 요소마다 AXUIElementCopyMultipleAttributeValues 한 번으로 읽기(`_multi`), 방별 창/테이블 캐시,
   현재 방은 0.7초마다, 방 목록과 다른 방은 4번에 한 번 읽기(`BG_EVERY`)로 바꿈. 실제 맥 측정은 `check`의 '읽기 시간'으로 확인할 것.
   못 읽어서 빈 결과가 오면 스냅샷을 유지한다(안 그러면 다음 폴링 때 메시지가 전부 새 것으로 쏟아진다)
+
+- [x] 전송 실패 원인 (2026-11-24): 카톡이 AX 요청 하나에 5~10ms라 50행 읽기가 2~3초. 0.7초마다 읽으니 카톡이 계속 바빠서
+  전송 AX 호출이 밀리고 실패했다. → 처음만 50행(`FULL_ROWS`), 이후엔 15행(`POLL_ROWS`)만 읽고 맨 앞이 연속 메시지면 Profile 행까지 더 읽음,
+  읽기 끝난 뒤 poll초 쉬기, 전송 중엔 폴링 중지 + 어댑터 락, 전송 성공은 입력창이 완전히 빌 때만, 실패 사유도 send.log에 남김.
+  측정: 폴링 읽기 0.2~1.2초 (실제 전송은 사용자 재확인 필요)
+
+- [x] (2026-11-24) 방을 처음 열 때도 가짜 로그 섞기(`HISTORY_FAKE`), 다른 방 알림(`notify` 스타일, 내용 없이 가명+개수,
+  열린 창은 sync로, 안 연 방은 메인 창 채팅 목록 `chat_list()`의 안 읽은 수 증가로), `/` 명령어 팔레트(`palette.py`),
+  `/open-chatroom`(목록 행 AXSelected + Return, 안 되면 activate) / `/close-chatroom`(AXCloseButton), `/mute`.
+  메인 창 채팅 목록 행: [Profile] 이름 [멤버 수] 시간 [마지막 메시지] [안 읽은 수(300+ 가능)] → `parse_chat_row`.
+  **open/close는 실제 맥에서 아직 안 눌러봄**(방을 열면 읽음 처리돼서 사용자 확인 필요)
+- [x] (2026-11-24) 윈도우 `/open-chatroom <이름>` / `/close-chatroom`: 메인 창 '카카오톡' > EVA_ChildWindow > 두 번째 EVA_Window > Edit(채팅 탭 검색칸)에
+  WM_SETTEXT + Enter, 새 방 창이 뜨면 검색칸 비움. 닫기는 WM_CLOSE. 채팅 목록은 못 읽어서(`chat_list` 미지원) 메뉴에 목록 대신 친 이름을 띄운다.
+  안 연 방 알림도 윈도우는 없음(열린 창 방만). **실제 윈도우에서 아직 안 돌려봄**
+- [x] (2026-11-24) `/speed 빠르게|보통|느리게`, 설정 `speed`: 가짜 로그 간격과 방 처음 열 때 섞는 확률(`speed.py`의 SPEEDS)
 
 ## 다음 할 일 (순서대로)
 

@@ -46,3 +46,9 @@ Screen {
     padding: 0 3;
     color: #8a8a8a;
 }
+
+#palette {
+    height: auto;
+    max-height: 8;
+    padding: 0 3;
+}

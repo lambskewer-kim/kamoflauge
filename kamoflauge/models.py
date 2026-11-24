@@ -16,6 +16,13 @@ class Message:
 
 
 @dataclass(frozen=True)
+class ChatEntry:
+    """카톡 메인 창 채팅 목록의 한 줄 (아직 창으로 안 연 방 포함)."""
+    name: str
+    unread: int = 0
+
+
+@dataclass(frozen=True)
 class Room:
     id: str              # 어댑터 내부 식별자 (맥에서는 창 제목)
     name: str

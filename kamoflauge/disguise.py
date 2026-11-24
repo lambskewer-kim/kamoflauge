@@ -43,6 +43,13 @@ class Disguise:
         a = self.alias(name)
         return a.rsplit(".", 1)[0]
 
+    @staticmethod
+    def is_media(text: str) -> bool:
+        """사진/이모티콘/동영상처럼 글자 없는 메시지인지."""
+        t = text.strip()
+        return (t in ("사진", "Photo", "photo", "이모티콘", "Emoticon", "emoticon", "동영상", "Video")
+                or (t.startswith("사진 ") and t.endswith("장")))
+
     def text(self, text: str) -> str:
         t = text.strip()
         if t in ("사진", "Photo", "photo") or t.startswith("사진 ") and t.endswith("장"):

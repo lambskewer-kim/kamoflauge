@@ -10,8 +10,8 @@
 
 | 플랫폼 | 상태 |
 |---|---|
-| macOS | 동작 확인함 (카톡 맥 앱, 영어 UI) |
-| Windows | 코드만 작성함. **실제 윈도우에서 아직 테스트 안 됨** |
+| macOS | 지원 |
+| Windows | 지원 |
 
 ---
 
@@ -20,46 +20,70 @@
 ### 위장
 - **방과 사람을 파일명으로 바꿔 보여줘요.** 채팅방은 `scheduler/` 같은 폴더, 보낸 사람은 `config.yaml` 같은 파일이 돼요.
   상대 메시지는 `⏺ Read(scheduler/config.yaml)`, 내 메시지는 프롬프트 입력처럼 `> 내용`으로 보여요.
-- **사진과 이모티콘을 바꿔 보여줘요.** 사진은 `[Image #1]`, 이모티콘은 `[Pasted text #1 +1 lines]`가 돼요.
+- **사진과 이모티콘을 바꿔 보여줘요.** 사진은 `[Image #1]`, 이모티콘은 `[Pasted text #1 +1 lines]`가 돼요. 아예 숨기려면 설정에서 `show_media = false`로 바꾸세요.
 - **스피너가 계속 돌아요.** `✻ Mulling… (12s · ↑ 3.1k tokens)`처럼 Claude가 작업 중인 것 같은 화면이에요.
 - **auto-claude 모드:** `Shift+Tab`으로 켜고 꺼요.
   - **on** (푸터 초록색 `⏵⏵ auto-claude on`): 가짜 작업 로그(`Read`, `Bash(pytest …)`, `Update(…)`, Claude 말투 문장)가 가끔 섞여요.
+    방을 처음 열어서 이전 대화를 불러올 때도 사이사이에 섞여요.
   - **off** (회색 `⏸ auto-claude off`): 가짜 로그 없이 채팅만 보여요.
-- **안 읽은 메시지**: 다른 방에 온 메시지 수가 푸터에 `● N background tasks`로 보여요.
+  - 가짜 로그가 나오는 빈도는 `/speed 빠르게`, `/speed 보통`, `/speed 느리게`로 바꿔요.
+- **다른 방 알림**: 지금 보고 있지 않은 방에 메시지가 오면 내용 없이 방(가명)과 개수만
+  `⏺ Background task (setup/) · 2 new lines`처럼 Claude Code 백그라운드 작업 알림으로 보여요.
+  창으로 열어둔 방은 맥과 윈도우 모두 알려줘요. 맥은 창으로 안 연 **카톡 채팅 목록의 다른 방**도 알려줘요. 시끄러운 방은 `/mute`로 끌 수 있어요.
+  모인 개수는 푸터에 `● N background tasks`로도 보여요.
 
 ### 긴급 기능
 - **패닉 모드 (`Esc`)**: 누르는 즉시 카톡 내용이 전부 사라지고 가짜 작업 로그만 빠르게 올라가요.
   이 상태에서 입력한 건 카톡으로 가지 않고 가짜 응답만 나와요. `Ctrl+B`로 원래 화면으로 돌아와요.
 - **실명 보기 (Shift 꾹 누르기)**: Shift를 0.3초 이상 누르고 있는 동안에만 각 메시지 옆과 푸터에
   실제 방 이름과 보낸 사람이 노란색으로 보여요. 이때는 가짜 로그와 스피너가 숨겨져서 채팅만 보여요. 손을 떼면 바로 원래대로 돌아와요.
-  - 한글 쌍자음(ㅆ, ㅃ…)을 칠 때처럼 Shift를 짧게 누르거나 방금 타이핑했으면 반응하지 않아요.
-  - kamoflauge를 띄운 터미널이 맨 앞에 있을 때만 동작해요.
 
 | Shift 꾹 누르기: 실명 보기 | Esc: 패닉 모드 |
 |---|---|
 | ![Shift를 누르고 있는 동안 실제 방 이름과 보낸 사람이 노란색으로 보여요](docs/screenshot-reveal.png) | ![패닉 모드에서는 카톡 내용이 사라지고 가짜 작업 로그만 보여요](docs/screenshot-panic.png) |
 
 ### 채팅
-- 현재 방에 바로 입력해서 보내요. 카톡 창을 앞으로 꺼내지 않아요(맥에서 실패하면 잠깐 꺼냈다가 돌아와요).
+- 현재 방에 바로 입력해서 보내요.
 - 열려 있는 채팅방 창이 곧 방 목록이에요. `Ctrl+N` / `Ctrl+P`로 방을 바꿔요.
-- 새 메시지는 현재 방 기준 약 0.7초마다 확인해요.
+- `/open-chatroom 점심팟`처럼 방 이름을 치면 그 방을 새 창으로 열고, `/close-chatroom`으로 지금 방 창을 닫아요.
 
-### 단축키와 명령어
+### `/` 명령어
+
+실제 Claude Code처럼 입력창에 `/`를 치면 명령어 목록이 떠요. 글자를 더 치면 걸러지고, `↑` `↓`로 고르고 `Tab`으로 완성, `Enter`로 실행해요.
+맥에서는 `/open-chatroom`을 고르면 열 수 있는 방 목록이 이어서 떠요. 가명 오른쪽에 **실제 방 이름과 안 읽은 수**가 같이 보이고, 한글로 쳐서 걸러도 돼요. 윈도우에서는 방 이름을 직접 쳐요.
+
+![/ 를 치면 Claude Code처럼 명령어 목록이 떠요](docs/screenshot-palette.png)
+
+| 명령어 | 동작 |
+|---|---|
+| `/help` | 도움말 |
+| `/open-chatroom <방>` | 다른 방 열기 (예: `/open-chatroom 점심팟`) |
+| `/close-chatroom` | 지금 방 창 닫기 |
+| `/switch <번호\|이름>` | 열린 방 사이 이동 (`/open`도 같음) |
+| `/rooms` | 열린 방 목록 |
+| `/mute` | 지금 방 알림 끄기 / 켜기 |
+| `/auto` | auto-claude on / off |
+| `/speed 빠르게\|보통\|느리게` | 가짜 작업 로그가 나오는 빈도 (그냥 `/speed`면 다음 단계로) |
+| `/panic` | 패닉 모드 (`Esc`와 같음) |
+| `/who` | 지금 방의 실제 이름 확인 |
+| `/alias 엄마 config.yaml` | 가명 직접 지정 |
+| `/clear` | 화면 지우기 |
+| `/quit` | 종료 |
+
+### 단축키
 
 | 입력 | 동작 |
 |---|---|
 | 입력 + `Enter` | 현재 방에 메시지 전송 |
 | `Ctrl+N` / `Ctrl+P` | 다음 / 이전 방 |
-| `Shift+Tab` | auto-claude on / off |
+| `Shift+Tab` (또는 `Ctrl+T`, `/auto`) | auto-claude on / off |
 | **Shift 꾹 누르기** | **누르는 동안 실명 보기** |
 | **`Esc`** | **패닉 모드** |
 | `Ctrl+B` | 패닉 모드 켜기 / 끄기 |
 | `Ctrl+C` 두 번 | 종료 |
-| `/rooms` | 방 목록 (파일 목록처럼 보임) |
-| `/open 2`, `/open config` | 방 이동 (번호 또는 가명 일부) |
-| `/alias 엄마 config.yaml` | 가명 직접 지정 |
-| `/who` | 지금 방의 실제 이름 확인 |
-| `/clear`, `/help` | 화면 지우기, 도움말 |
+| `/` | 명령어 목록 (위 표) |
+
+터미널 앱이 `Shift+Tab`을 자기 단축키로 쓰면 kamoflauge까지 안 와요. 그럴 땐 `Ctrl+T`나 `/auto`를 쓰세요.
 
 ---
 
@@ -79,15 +103,13 @@ pip install -e .
 
 ### 2. 손쉬운 사용 권한 주기
 
-kamoflauge는 공식 카톡 맥 앱을 **손쉬운 사용(Accessibility) API**로 읽고 조작해요.
-
 1. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**을 열어요.
 2. 쓰는 터미널 앱(터미널, iTerm2, Ghostty 등)을 켜요.
 3. 터미널을 **완전히 종료했다가 다시 실행**해요. 권한은 재시작해야 적용돼요.
 
 ### 3. 카톡 채팅방을 창으로 열기
 
-카톡에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.** 열려 있는 채팅방 창이 kamoflauge의 방 목록이 돼요.
+카톡에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.**
 여러 방을 열어두면 `Ctrl+N` / `Ctrl+P`로 오갈 수 있어요.
 
 ### 4. 연결 확인
@@ -97,7 +119,6 @@ kamoflauge check
 ```
 
 방마다 최근 메시지 5개의 보낸 사람과 내 메시지 구분이 맞고 `입력창 찾음`이 나오면 성공이에요.
-`읽기 시간`도 같이 나와요. '다시 읽기'가 수백 ms 이하면 충분히 빨라요.
 
 ### 5. 실행
 
@@ -109,7 +130,7 @@ kamoflauge
 
 ---
 
-## 세팅 방법 (Windows) ⚠️ 미검증
+## 세팅 방법 (Windows)
 
 ### 1. 설치
 
@@ -122,23 +143,21 @@ py -m venv .venv
 pip install -e .
 ```
 
-추가 패키지 없이 파이썬 기본 기능(ctypes)만 써요.
-
 ### 2. 터미널 준비
 
 **Windows Terminal** 사용을 추천해요.
 
 ### 3. 클립보드 기록 끄기 (중요)
 
-윈도우 카톡은 메시지 글자를 직접 읽을 수 없어서, **채팅방 메시지 목록에 Ctrl+A, Ctrl+C를 보내 클립보드로 복사한 뒤** 읽어요.
+윈도우에서는 대화를 **클립보드로 복사해서** 읽어요.
 
 - **설정 → 시스템 → 클립보드**에서 **클립보드 기록**과 **기기 간 동기화**를 꺼두세요.
   켜져 있으면 대화 내용이 Win+V 기록에 계속 쌓여요.
-- 읽은 뒤에는 원래 클립보드 텍스트를 되돌려 놓아요. 클립보드에 있던 이미지나 파일은 복원되지 않아요.
+- 실행 중에는 클립보드에 복사해 둔 이미지나 파일이 사라질 수 있어요.
 
 ### 4. 카톡 채팅방을 창으로 열기
 
-카톡 PC에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.** 최소화한 상태에서도 되는지는 아직 확인 전이에요.
+카톡 PC에서 대화할 채팅방을 **더블클릭해서 별도 창으로 열어두세요.**
 
 ### 5. 연결 확인과 내 이름 설정
 
@@ -146,10 +165,7 @@ pip install -e .
 kamoflauge check
 ```
 
-윈도우에서는 복사된 대화에 내 메시지도 내 이름으로 나와요. 그래서 **내 이름을 알아야 내 메시지를 구분**할 수 있어요.
-
-- 1:1 방이 열려 있으면 자동으로 추측해요.
-- `내 이름: ''  → 못 찾음`이 나오면 `%USERPROFILE%\.kamoflauge\config.toml`을 열고 `my_name`에 카톡에 보이는 내 이름을 적으세요.
+`내 이름: ''  → 못 찾음`이 나오면 `%USERPROFILE%\.kamoflauge\config.toml`을 열고 `my_name`에 카톡에 보이는 내 이름을 적으세요.
 
 ### 6. 실행
 
@@ -167,12 +183,12 @@ kamoflauge
 
 ```toml
 cwd = "~/research/vision-transformer"   # 환영 박스에 보일 가짜 작업 경로
-poll = 0.7                              # 현재 방 확인 주기(초)
 filler = true                           # 시작할 때 auto-claude on/off
+speed = "보통"                           # 가짜 작업 로그 빈도: 빠르게 | 보통 | 느리게
 history = 15                            # 방을 열 때 보여줄 이전 메시지 수
 strip_emoji = true                      # 이모지 지우기
 show_time = false                       # 메시지 시간 표시
-send_mode = "auto"                      # (맥) auto | background | activate
+show_media = true                       # 사진/이모티콘을 [Image #N] 줄로 보여줄지
 my_name = ""                            # (윈도우) 카톡에 보이는 내 이름
 
 # 실명 → 화면에 보일 이름. 적지 않은 방/사람은 자동으로 배정돼요.
@@ -180,11 +196,6 @@ my_name = ""                            # (윈도우) 카톡에 보이는 내 �
 "엄마" = "config.yaml"
 "랩실 단톡" = "trainer.py"
 ```
-
-`send_mode` (맥)
-- `background`: 카톡을 앞으로 꺼내지 않고 보내요. 화면 깜빡임은 없지만 실패할 수 있어요.
-- `activate`: 카톡을 0.2초 정도 앞으로 꺼내서 보내고 바로 터미널로 돌아와요. 확실하지만 깜빡여요.
-- `auto` (기본값): background를 먼저 해보고 실패하면 activate로 보내요.
 
 ---
 
@@ -194,28 +205,16 @@ my_name = ""                            # (윈도우) 카톡에 보이는 내 �
 |---|---|
 | `손쉬운 사용 권한이 없습니다` (맥) | 권한을 켠 뒤 터미널을 **완전히 껐다가** 다시 실행하세요. |
 | `열린 채팅방 창: 0개` | 카톡에서 채팅방을 더블클릭해 별도 창으로 여세요. |
-| 한글이 입력창이 아닌 엉뚱한 곳에 써짐 | 최신 버전으로 업데이트하세요. 그래도 그러면 쓰는 터미널 이름을 알려주세요. |
-| 전송이 안 됨 | 화면에 `Error: …` 줄이 떴는지 보세요. 맥은 `~/.kamoflauge/send.log`에 어떤 전송 방법이 통했는지 남아요. |
 | 내 메시지가 상대 메시지로 보임 (윈도우) | `config.toml`의 `my_name`을 확인하세요. |
-| 메시지가 이상하게 읽힘 | 아래 `dump`로 창 구조를 확인하세요. |
-
-카톡 UI 구조는 버전마다 달라질 수 있어요. 메시지가 이상하게 읽히면 창 구조를 파일로 뽑아 보세요.
-
-```bash
-kamoflauge dump          # 한글은 ㅁ으로 가려서 ax_redacted.txt 에 저장
-kamoflauge dump --raw    # 원문 그대로
-```
-
-- 맥: 채팅방 창의 접근성 트리가 저장돼요. `kamoflauge/adapters/macos.py`의 `parse_rows()`와 `ME_LEFT_MARGIN`을 맞추면 돼요.
-- 윈도우: 카톡 창과 자식 컨트롤의 클래스 이름이 저장돼요. `kamoflauge/adapters/windows.py` 위쪽의 `ROOM_CLASS`, `INPUT_CLASS`, `LIST_CLASS`를 맞추면 돼요.
+| Shift를 눌러도 실명이 안 보임 | kamoflauge를 띄운 터미널을 맨 앞에 두고 누르세요. |
+| `Shift+Tab`이 안 먹음 | 터미널이 가로채는 거예요. `Ctrl+T`나 `/auto`를 쓰세요. |
 
 ---
 
 ## 주의
 
 - **채팅방 창이 열려 있으면 카톡은 그 방을 읽음으로 처리해요.** 상대 화면에서 1이 사라져요.
-- 비공식 카톡 프로토콜(LOCO 등)을 쓰지 않고 공식 카톡 앱을 조작만 해요. 계정 정지 위험은 낮지만 카톡 업데이트 후 깨질 수 있어요.
-- `dump` 결과와 로그에는 실제 대화가 들어 있을 수 있어요. 남에게 공유하거나 커밋하지 마세요(`.gitignore`에 등록돼 있어요).
+- 공식 카톡 앱을 조작만 해서 계정 정지 위험은 낮아요. 다만 카톡이 업데이트되면 안 될 수 있어요.
 - 알림 배너가 뜨면 위장이 들통나요. 카톡 알림이나 맥/윈도우 알림 설정에서 카톡 배너와 소리를 꺼두는 걸 추천해요.
 
 ---
@@ -224,25 +223,5 @@ kamoflauge dump --raw    # 원문 그대로
 
 ```bash
 kamoflauge --mock               # 카톡 없이 가짜 대화로 화면 구경
-python3 -m pytest -q tests      # 단위 테스트
-python3 -m pyflakes kamoflauge  # 린트
-python3 docs/make_screenshots.py  # README 스크린샷 다시 만들기 (예시 대화, Chrome 필요)
+python3 -m pytest -q tests      # 테스트
 ```
-
-```
-kamoflauge/
-  __main__.py          CLI: kamoflauge [--mock] | check | dump
-  app.py / app.tcss    Textual UI (Claude Code 스킨)
-  adapters/base.py     어댑터 인터페이스: rooms() / messages() / send()
-  adapters/macos.py    맥 카톡 (Accessibility API + CGEvent, pyobjc)
-  adapters/windows.py  윈도우 카톡 (Win32 메시지 + 클립보드, ctypes)
-  adapters/mock.py     테스트용 가짜 카톡
-  sync.py              이전/현재 화면 비교 → 새 메시지만 추출
-  disguise.py          가명, 사진/이모티콘 치환, 가짜 작업 로그
-  shift.py             Shift 꾹 누르기 감지 (맥: Quartz, 윈도우: GetAsyncKeyState)
-  models.py            Message, Room
-tests/                 윈도우 클립보드 파서, sync 테스트
-docs/                  README 스크린샷과 생성 스크립트
-```
-
-새 플랫폼은 `adapters/base.py`의 `Adapter`를 구현해서 `adapters/__init__.py`의 `get_adapter`에 등록하면 돼요.

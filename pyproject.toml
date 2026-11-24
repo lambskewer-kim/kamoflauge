@@ -18,8 +18,8 @@ kamoflauge = "kamoflauge.__main__:main"
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["kamoflauge", "kamoflauge.adapters"]
+[tool.setuptools.packages.find]
+include = ["kamoflauge*"]
 
 [tool.setuptools.package-data]
 kamoflauge = ["*.tcss"]

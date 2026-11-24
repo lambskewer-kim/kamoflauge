@@ -1,5 +1,5 @@
 """윈도우 카톡에서 복사한 대화 텍스트 파서 테스트 (윈도우가 아니어도 돈다)."""
-from kamoflauge.adapters.windows import guess_my_name, parse_clipboard
+from kamoflauge.platforms.windows.adapter import guess_my_name, parse_clipboard
 
 SAMPLE = """\
 2026년 11월 24일 화요일

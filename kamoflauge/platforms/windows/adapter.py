@@ -7,7 +7,10 @@
 
   - 읽기: 메시지 목록에 Ctrl+A, Ctrl+C를 보내서 클립보드에 복사한 다음 파싱한다.
     원래 클립보드 텍스트는 읽은 뒤 되돌려 놓는다 (텍스트만 복원됨).
-  - 쓰기: 입력창에 WM_SETTEXT로 글자를 넣고 Enter를 보낸다. 카톡 창을 앞으로 꺼내지 않는다.
+  - 쓰기: 해당 방의 입력창을 선택하고 글을 넣은 뒤 Enter를 한 번 보낸다.
+  - 방 열기: 메인 창(EVA_Window_Dblclk, 제목 '카카오톡') > EVA_ChildWindow > 두 번째 EVA_Window(채팅 탭) > Edit(검색칸)에
+    방 이름을 넣고 Enter. 채팅 목록 자체는 직접 그리는 컨트롤이라 이름/안 읽은 수를 읽을 수 없다.
+  - 방 닫기: 채팅방 창에 WM_CLOSE.
 
 안 맞으면 `kamoflauge dump`로 창 구조를 보고 아래 클래스 이름을 고친다.
 """
@@ -19,19 +22,29 @@ import threading
 import time
 from ctypes import wintypes
 
-from ..models import Message, Room
-from .base import Adapter
+from ...models import Message, Room
+from ...adapters.base import Adapter
 
 ROOM_CLASS = "#32770"
 INPUT_CLASS = "RICHEDIT50W"
 LIST_CLASS = "EVA_VH_ListControl_Dblclk"
 MAIN_CLASS = "EVA_Window_Dblclk"
+MAIN_TITLES = ("카카오톡", "KakaoTalk")
+SEARCH_PATH = ("EVA_ChildWindow", "EVA_Window#2", "Edit")  # 메인 창에서 채팅 탭 검색칸까지
+OPEN_WAIT = 3.0  # 방 창이 뜨기를 기다리는 최대 시간(초)
 
 WM_SETTEXT = 0x000C
+WM_GETTEXT = 0x000D
+WM_CLOSE = 0x0010
 WM_GETTEXTLENGTH = 0x000E
+EM_SETSEL = 0x00B1
+EM_REPLACESEL = 0x00C2
+WM_LBUTTONDOWN = 0x0201
+WM_LBUTTONUP = 0x0202
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
 VK_RETURN = 0x0D
+VK_SHIFT = 0x10
 VK_CONTROL = 0x11
 CF_UNICODETEXT = 13
 GMEM_MOVEABLE = 0x0002
@@ -86,7 +99,10 @@ def _win32():
     user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
     user32.SendMessageW.restype = ctypes.c_ssize_t
     user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+    user32.FindWindowExW.restype = wintypes.HWND
     user32.GetClipboardData.restype = wintypes.HANDLE
+    user32.GetClipboardSequenceNumber.restype = wintypes.DWORD
     user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
     user32.SetClipboardData.restype = wintypes.HANDLE
     kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
@@ -136,7 +152,7 @@ class WinKakaoAdapter(Adapter):
     def _room_windows(self) -> list[tuple[str, int]]:
         wins = []
         for h in self._top_windows():
-            if self._class(h) != ROOM_CLASS:
+            if self._class(h) not in (ROOM_CLASS, MAIN_CLASS):
                 continue
             if self._find_child(h, INPUT_CLASS) and self._find_child(h, LIST_CLASS):
                 wins.append((self._title(h), h))
@@ -149,7 +165,10 @@ class WinKakaoAdapter(Adapter):
         raise KeyError(f"채팅방 창을 찾을 수 없음: {room_id}")
 
     # --- keyboard ---
-    def _post_key(self, hwnd, key: int, ctrl: bool = False) -> None:
+    def _shift_held(self) -> bool:
+        return bool(self.u.GetAsyncKeyState(VK_SHIFT) & 0x8000)
+
+    def _post_key(self, hwnd, key: int, ctrl: bool = False) -> bool:
         """창을 앞으로 꺼내지 않고 키를 보낸다. Ctrl 조합은 대상 스레드의 키보드 상태를 잠깐 바꿔서 흉내낸다."""
         scan = self.u.MapVirtualKeyW(key, 0)
         lparam = 1 | (scan << 16)
@@ -157,6 +176,8 @@ class WinKakaoAdapter(Adapter):
         me = self.k.GetCurrentThreadId()
         old = (ctypes.c_ubyte * 256)()
         if ctrl:
+            if self._shift_held():
+                return False
             self.u.AttachThreadInput(me, tid, True)
             self.u.GetKeyboardState(old)
             new = (ctypes.c_ubyte * 256)(*old)
@@ -164,10 +185,14 @@ class WinKakaoAdapter(Adapter):
             self.u.SetKeyboardState(new)
             time.sleep(0.01)
         try:
+            # Ctrl을 준비하는 사이 Shift가 눌리면 캡처 단축키가 될 수 있다.
+            if ctrl and self._shift_held():
+                return False
             self.u.PostMessageW(hwnd, WM_KEYDOWN, key, lparam)
             time.sleep(0.01)
             self.u.PostMessageW(hwnd, WM_KEYUP, key, lparam | 0xC0000000)
             time.sleep(0.02)
+            return True
         finally:
             if ctrl:
                 self.u.SetKeyboardState(old)
@@ -215,24 +240,25 @@ class WinKakaoAdapter(Adapter):
 
     def _copy_chat(self, hwnd) -> str:
         lst = self._find_child(hwnd, LIST_CLASS)
-        if not lst:
+        if not lst or self._shift_held():
+            return ""
+        if not self._post_key(lst, ord("A"), ctrl=True) or self._shift_held():
             return ""
         saved = self._get_clipboard()
-        marker = f"kamoflauge-{time.time()}"
-        self._set_clipboard(marker)
+        # 복사 전에는 클립보드를 바꾸지 않는다. Shift로 취소해도 원본이 유지된다.
+        before = self.u.GetClipboardSequenceNumber()
+        if not self._post_key(lst, ord("C"), ctrl=True):
+            return ""
         try:
-            self._post_key(lst, ord("A"), ctrl=True)
-            self._post_key(lst, ord("C"), ctrl=True)
-            text = ""
             for _ in range(30):  # 카톡이 복사를 끝낼 때까지 잠깐 기다린다
                 time.sleep(0.02)
-                cur = self._get_clipboard()
-                if cur and cur != marker:
-                    text = cur
-                    break
-            return text
+                text = self._get_clipboard()
+                if text and self.u.GetClipboardSequenceNumber() != before:
+                    return text
+            return ""
         finally:
-            self._set_clipboard(saved)
+            if self.u.GetClipboardSequenceNumber() != before:
+                self._set_clipboard(saved)
 
     # --- public ---
     def rooms(self) -> list[Room]:
@@ -250,21 +276,88 @@ class WinKakaoAdapter(Adapter):
             self.my_name = guess_my_name(text, room_id)
         return parse_clipboard(text, self.my_name)[-last_n:]
 
+    def _input_text(self, edit) -> str:
+        if not self.u.IsWindow(edit):
+            raise RuntimeError("카톡 입력창이 닫혔습니다")
+        size = self.u.SendMessageW(edit, WM_GETTEXTLENGTH, 0, 0) + 1
+        buf = ctypes.create_unicode_buffer(size)
+        self.u.SendMessageW(edit, WM_GETTEXT, size, ctypes.addressof(buf))
+        return buf.value.replace("\r\n", "\n").replace("\r", "\n")
+
     def send(self, room_id: str, text: str) -> None:
         with self._lock:
             hwnd = self._window(room_id)
             edit = self._find_child(hwnd, INPUT_CLASS)
             if not edit:
                 raise RuntimeError("입력창을 찾지 못했습니다 (kamoflauge dump 로 구조 확인 필요)")
+            # Select this room's composer even while another window is in front.
+            self.u.SendMessageW(edit, WM_LBUTTONDOWN, 1, (5 << 16) | 5)
+            self.u.SendMessageW(edit, WM_LBUTTONUP, 0, (5 << 16) | 5)
+            self.u.SendMessageW(edit, EM_SETSEL, 0, -1)
             buf = ctypes.create_unicode_buffer(text)
-            self.u.SendMessageW(edit, WM_SETTEXT, 0, ctypes.addressof(buf))
+            self.u.SendMessageW(edit, EM_REPLACESEL, 1, ctypes.addressof(buf))
+            expected = text.replace("\r\n", "\n").replace("\r", "\n")
+            if self._input_text(edit) != expected:
+                raise RuntimeError("카톡 입력칸에 전송할 문구가 정확히 입력되지 않았습니다")
             self._post_key(edit, VK_RETURN)
-            time.sleep(0.3)
-            if self.u.SendMessageW(edit, WM_GETTEXTLENGTH, 0, 0) > 0:
-                raise RuntimeError("전송 실패: 카톡 입력창에 글자가 남아 있습니다")
+            deadline = time.monotonic() + 1.5
+            while time.monotonic() < deadline:
+                remaining = self._input_text(edit)
+                if not remaining or (remaining == "메시지 입력" and remaining != expected):
+                    return
+                time.sleep(0.05)
+            raise RuntimeError("전송을 확인하지 못했습니다. 다시 보내기 전에 카톡 대화를 확인하세요")
 
     def has_input(self, room_id: str) -> bool:
         return self._find_child(self._window(room_id), INPUT_CLASS) is not None
+
+    # --- 방 열기 / 닫기 ---
+    def _main_window(self):
+        for h in self._top_windows():
+            if self._class(h) == MAIN_CLASS and self._title(h) in MAIN_TITLES:
+                return h
+        raise RuntimeError("카톡 메인 창을 찾지 못했습니다 (카톡이 켜져 있는지 확인)")
+
+    def _direct_child(self, parent, step: str):
+        """step = '클래스' 또는 '클래스#n' (같은 클래스의 n번째 직계 자식)."""
+        cls, _, nth = step.partition("#")
+        h = None
+        for _ in range(int(nth or 1)):
+            h = self.u.FindWindowExW(parent, h, cls, None)
+            if not h:
+                return None
+        return h
+
+    def _search_box(self, main):
+        h = main
+        for step in SEARCH_PATH:
+            h = self._direct_child(h, step)
+            if not h:
+                raise RuntimeError("카톡 메인 창의 채팅 검색칸을 찾지 못했습니다 (카톡에서 채팅 탭을 한 번 눌러 두세요)")
+        return h
+
+    def open_room(self, name: str) -> None:
+        with self._lock:
+            before = {t for t, _ in self._room_windows()}
+            if name in before:
+                return
+            box = self._search_box(self._main_window())
+            buf = ctypes.create_unicode_buffer(name)
+            self.u.SendMessageW(box, WM_SETTEXT, 0, ctypes.addressof(buf))
+            time.sleep(0.6)  # 검색 결과가 갱신될 시간
+            self._post_key(box, VK_RETURN)
+            deadline = time.monotonic() + OPEN_WAIT
+            opened = False
+            while time.monotonic() < deadline and not opened:
+                time.sleep(0.15)
+                opened = bool({t for t, _ in self._room_windows()} - before)
+            empty = ctypes.create_unicode_buffer("")
+            self.u.SendMessageW(box, WM_SETTEXT, 0, ctypes.addressof(empty))  # 검색어를 남기지 않는다
+        if not opened:
+            raise RuntimeError(f"'{name}' 방이 열리지 않았습니다 (카톡 채팅 목록에 있는 이름인지 확인)")
+
+    def close_room(self, room_id: str) -> None:
+        self.u.PostMessageW(self._window(room_id), WM_CLOSE, 0, 0)
 
 
 def dump_tree(path: str, redact: bool = True) -> int:

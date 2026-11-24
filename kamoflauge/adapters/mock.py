@@ -27,6 +27,8 @@ class MockAdapter(Adapter):
             ],
         }
         self._chatter = chatter
+        self._closed: dict = {"동아리": [Message("수빈", "이번 주 회식 언제?", "오전 9:02")]}  # 창으로 안 연 방
+        self._list_unread: dict = {"동아리": 2}
         self._next = time.time() + 3
 
     def _tick(self) -> None:
@@ -45,6 +47,22 @@ class MockAdapter(Adapter):
         with self._lock:
             self._tick()
             return list(self._rooms.get(room_id, []))[-50:]
+
+    def chat_list(self, limit: int = 20):
+        from ..models import ChatEntry
+        with self._lock:
+            listed = list(self._rooms) + [n for n in self._closed if n not in self._rooms]
+            return [ChatEntry(n, self._list_unread.get(n, 0)) for n in listed][:limit]
+
+    def open_room(self, name: str) -> None:
+        with self._lock:
+            if name not in self._rooms:
+                self._rooms[name] = self._closed.pop(name, [])
+            self._list_unread.pop(name, None)
+
+    def close_room(self, room_id: str) -> None:
+        with self._lock:
+            self._closed[room_id] = self._rooms.pop(room_id)
 
     def send(self, room_id: str, text: str) -> None:
         with self._lock:
